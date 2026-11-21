@@ -1,0 +1,79 @@
+diff --git a/libavformat/hls.c b/libavformat/hls.c
+index 114f399..2837bd5 100644
+--- a/libavformat/hls.c
++++ b/libavformat/hls.c
+@@ -220,6 +220,7 @@ typedef struct HLSContext {
+     AVIOInterruptCB *interrupt_callback;
+     AVDictionary *avio_opts;
+     AVDictionary *seg_format_opts;
++    int seg_allow_img;
+     char *allowed_extensions;
+     int max_reload;
+     int http_persistent;
+@@ -2112,7 +2113,56 @@ static int hls_read_header(AVFormatContext *s)
+             pls->ctx->max_analyze_duration = s->max_analyze_duration > 0 ? s->max_analyze_duration : 4 * AV_TIME_BASE;
+             pls->ctx->interrupt_callback = s->interrupt_callback;
+             url = av_strdup(pls->segments[0]->url);
+-            ret = av_probe_input_buffer(&pls->pb.pub, &in_fmt, url, NULL, 0, 0);
++            /* Peek at the beginning of the first segment to detect
++             * png/gif-magic-pretending segments, then always restore the
++             * read position. When a fake image magic is found we do not
++             * assert the format ourselves: the generic probe is re-run with
++             * (a) an offset that breaks the image signature and (b) a NULL
++             * filename so that the .webp-style URL extension can no longer
++             * boost image demuxer scores. The probe then decides from the
++             * actual payload (e.g. mpegts via 0x47 + 188 alignment). This
++             * keeps the HLS layer free of format assumptions: malformed
++             * png/gif-looking garbage simply fails the probe at header time
++             * instead of being forced into mpegts. */
++            {
++                uint8_t b[10] = { 0 };
++                unsigned probe_offset = 0;
++                const char *probe_url = url;
++                int n = avio_read(&pls->pb.pub, b, sizeof(b));
++                if (n < 0 && n != AVERROR_EOF) {
++                    /* propagate real I/O errors like av_probe_input_buffer2()
++                     * does, instead of degrading them into a second probe */
++                    ret = n;
++                    av_log(s, AV_LOG_ERROR, "Failed to read segment header for probing: %s\n",
++                           av_err2str(ret));
++                    avformat_free_context(pls->ctx);
++                    pls->ctx = NULL;
++                    av_free(url);
++                    return ret;
++                }
++                if (n == AVERROR_EOF)
++                    n = 0;
++                if ((ret = avio_seek(&pls->pb.pub, 0, SEEK_SET)) < 0) {
++                    av_log(s, AV_LOG_ERROR, "Failed to restore segment read position after signature check: %s\n",
++                           av_err2str(ret));
++                    avformat_free_context(pls->ctx);
++                    pls->ctx = NULL;
++                    av_free(url);
++                    return ret;
++                }
++                if (!c->seg_allow_img) {
++                    if (n >= 8 && !memcmp(b, "\x89PNG\r\n\x1a\n", 8)) {
++                        probe_offset = 3;  /* break the png signature for the probe */
++                        probe_url = NULL;  /* drop misleading extension scores */
++                        av_log(s, AV_LOG_INFO, "Segment starts with png magic, probing without filename at offset %u\n", probe_offset);
++                    } else if (n >= 6 && (!memcmp(b, "GIF87a", 6) || !memcmp(b, "GIF89a", 6))) {
++                        probe_offset = 10; /* break the gif signature for the probe */
++                        probe_url = NULL;
++                        av_log(s, AV_LOG_INFO, "Segment starts with gif magic, probing without filename at offset %u\n", probe_offset);
++                    }
++                }
++                ret = av_probe_input_buffer(&pls->pb.pub, &in_fmt, probe_url, NULL, probe_offset, 0);
++            }
+             if (ret < 0) {
+                 /* Free the ctx - it isn't initialized properly at this point,
+                 * so avformat_close_input shouldn't be called. If
+@@ -2565,6 +2615,8 @@ static const AVOption hls_options[] = {
+         OFFSET(seg_format_opts), AV_OPT_TYPE_DICT, {.str = NULL}, 0, 0, FLAGS},
+     {"seg_max_retry", "Maximum number of times to reload a segment on error.",
+      OFFSET(seg_max_retry), AV_OPT_TYPE_INT, {.i64 = 0}, 0, INT_MAX, FLAGS},
++    {"seg_allow_img", "Allow PNG/GIF-signature HLS segments to participate in normal image probing; 0 = probe past image disguise, 1 = normal probing",
++        OFFSET(seg_allow_img), AV_OPT_TYPE_BOOL, { .i64 = 0}, 0, 1, FLAGS},
+     {NULL}
+ };
+ 

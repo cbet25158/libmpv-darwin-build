@@ -1,6 +1,6 @@
 Backport of two upstream FFmpeg HLS seek fixes onto ffmpeg 6.0, applied
 on top of this repository's other ffmpeg patches (must run after
-ffmpeg-hls-kazumi-combined.patch; the order is defined in
+ffmpeg-hls-anime-combined.patch; the order is defined in
 nix/packages/mk-pkg-ffmpeg/default.nix):
 
 - caa3fa6af070c1eeee59da027fdcde326fc64a89
@@ -11,15 +11,16 @@ nix/packages/mk-pkg-ffmpeg/default.nix):
 Fixes mid-playback seeks back to position 0 on streams whose timestamps
 do not start at 0 (previously EIO -> decoding resumed mid-GOP with
 corrupted frames) and backward seeks landing one segment (~7s) late.
-The android build (cbet25158/libmpv-android-video-build) ships the same
-backport on ffmpeg 7.1.3; see PATCHES-hls-seek.md there for the full
-analysis and on-device verification criteria.
+The android build (cbet25158/libmpv-android-video-build) shipped the same
+backport on ffmpeg 7.1.3 in v1.0.0; later android builds pin an ffmpeg
+snapshot that already contains both commits. See PATCHES-hls-seek.md there
+for the full analysis and on-device verification criteria.
 
 diff --git a/libavformat/hls.c b/libavformat/hls.c
-index 3829cde..a95a790 100644
+index 2837bd5..fa4eb8b 100644
 --- a/libavformat/hls.c
 +++ b/libavformat/hls.c
-@@ -1724,8 +1724,11 @@ static int find_timestamp_in_playlist(HLSContext *c, struct playlist *pls,
+@@ -1702,8 +1702,11 @@ static int find_timestamp_in_playlist(HLSContext *c, struct playlist *pls,
                    0 : c->first_timestamp;
  
      if (timestamp < pos) {
@@ -32,7 +33,7 @@ index 3829cde..a95a790 100644
      }
  
      for (i = 0; i < pls->n_segments; i++) {
-@@ -2555,6 +2558,7 @@ static int hls_read_seek(AVFormatContext *s, int stream_index,
+@@ -2493,6 +2496,7 @@ static int hls_read_seek(AVFormatContext *s, int stream_index,
      int stream_subdemuxer_index;
      int64_t first_timestamp, seek_timestamp, duration;
      int64_t seq_no, seg_start_ts;
@@ -40,7 +41,7 @@ index 3829cde..a95a790 100644
  
      if ((flags & AVSEEK_FLAG_BYTE) || (c->ctx->ctx_flags & AVFMTCTX_UNSEEKABLE))
          return AVERROR(ENOSYS);
-@@ -2593,6 +2597,7 @@ static int hls_read_seek(AVFormatContext *s, int stream_index,
+@@ -2531,6 +2535,7 @@ static int hls_read_seek(AVFormatContext *s, int stream_index,
          /* Seeking to start of segment ensures we seek to a keyframe located
           * before the given timestamp. */
          seek_timestamp = seg_start_ts;
@@ -48,7 +49,7 @@ index 3829cde..a95a790 100644
      }
  
      /* set segment now so we do not need to search again below */
-@@ -2622,6 +2627,15 @@ static int hls_read_seek(AVFormatContext *s, int stream_index,
+@@ -2560,6 +2565,15 @@ static int hls_read_seek(AVFormatContext *s, int stream_index,
          pls->seek_timestamp = seek_timestamp;
          pls->seek_flags = flags;
  
