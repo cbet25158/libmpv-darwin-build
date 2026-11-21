@@ -1,6 +1,6 @@
 Backport of two upstream FFmpeg HLS seek fixes onto ffmpeg 6.0, applied
 on top of this repository's other ffmpeg patches (must run after
-ffmpeg-hls-kazumi-combined.patch; the order is defined in
+ffmpeg-hls-anime-combined.patch; the order is defined in
 nix/packages/mk-pkg-ffmpeg/default.nix):
 
 - caa3fa6af070c1eeee59da027fdcde326fc64a89
@@ -11,9 +11,10 @@ nix/packages/mk-pkg-ffmpeg/default.nix):
 Fixes mid-playback seeks back to position 0 on streams whose timestamps
 do not start at 0 (previously EIO -> decoding resumed mid-GOP with
 corrupted frames) and backward seeks landing one segment (~7s) late.
-The android build (cbet25158/libmpv-android-video-build) ships the same
-backport on ffmpeg 7.1.3; see PATCHES-hls-seek.md there for the full
-analysis and on-device verification criteria.
+The android build (cbet25158/libmpv-android-video-build) shipped the same
+backport on ffmpeg 7.1.3 in v1.0.0; later android builds pin an ffmpeg
+snapshot that already contains both commits. See PATCHES-hls-seek.md there
+for the full analysis and on-device verification criteria.
 
 diff --git a/libavformat/hls.c b/libavformat/hls.c
 index 2837bd5..fa4eb8b 100644

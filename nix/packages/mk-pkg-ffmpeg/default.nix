@@ -46,7 +46,7 @@ let
     patch -p1 <${../../../patches/ffmpeg-fix-hls-mp4-seek.patch}
     patch -p1 <${../../../patches/ffmpeg-fix-ios-hdr-texture.patch}
     patch -p1 <${../../../patches/ffmpeg-fix-dash-base-url-escape.patch}
-    patch -p1 <${../../../patches/ffmpeg-hls-kazumi-combined.patch}
+    patch -p1 <${../../../patches/ffmpeg-hls-anime-combined.patch}
     patch -p1 <${../../../patches/ffmpeg-hls-seek-backport.patch}
     cd -
 
